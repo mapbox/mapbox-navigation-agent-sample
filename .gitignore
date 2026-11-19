@@ -1,0 +1,6 @@
+.DS_Store
+xcuserdata/
+dist/
+.build/
+.idea/
+*.iml

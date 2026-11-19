@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">Mapbox AI Voice Navigation Sample App</string>
+
+    <string name="mapbox_token_required_title">Mapbox access token required</string>
+    <string name="mapbox_token_required_body">Add your Mapbox public access token in Settings to load the map.</string>
+    <string name="mapbox_token_open_settings">Open Settings</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_mapbox_heading">Mapbox access token</string>
+    <string name="settings_mapbox_body">Create a public token at mapbox.com and paste it here. Tokens are not included in cloud or device backups. The map loads after you save a token.</string>
+    <string name="settings_mapbox_label">Mapbox access token</string>
+    <string name="settings_save_mapbox_token">Save Mapbox token</string>
+    <string name="settings_back">Back</string>
+    <string name="settings_openai_heading">OpenAI API key</string>
+    <string name="settings_openai_body">Bring your own OpenAI API key. It is stored on this device, is not included in cloud or device backups, and is used only to connect voice sessions to OpenAI.</string>
+    <string name="settings_openai_label">OpenAI API key</string>
+    <string name="settings_save_api_key">Save key</string>
+    <string name="settings_show_api_key">Show API key</string>
+    <string name="settings_hide_api_key">Hide API key</string>
+    <string name="settings_location_heading">Location mode</string>
+    <string name="settings_location_body">Open the map settings menu to switch between simulated location and live GPS.</string>
+    <string name="settings_version_heading">Version %1$s</string>
+    <string name="settings_content_description">Settings</string>
+
+    <string name="first_launch_title">Before you drive</string>
+    <string name="first_launch_openai_notice">This sample uses your OpenAI account for voice. Do not use it while driving unless it is safe and legal where you are. You are responsible for your OpenAI usage and costs.</string>
+    <string name="first_launch_mapbox_notice">Map display and routing use your Mapbox access token and Mapbox services, subject to Mapbox terms.</string>
+    <string name="first_launch_permissions_notice">The app needs microphone and location access for voice commands and navigation. Permission prompts appear when you first start a session.</string>
+    <string name="first_launch_acknowledge">I understand</string>
+
+    <string name="error_openai_key_missing">Add your OpenAI API key in Settings before starting.</string>
+</resources>
