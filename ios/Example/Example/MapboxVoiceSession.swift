@@ -15,41 +15,44 @@ nonisolated public enum MapboxVoiceEvent: Sendable, Equatable {
 
 /// A voice session that speaks with the user and issues each tool call through a Mapbox MCP client.
 ///
-/// The GPT-Live socket, protocol, and tool loop run in ViaKit, behind `LiveVoiceSession`. This type
-/// captures microphone audio, plays the assistant's replies, and reports what the session does.
+/// WebRTC carries the microphone and the reply. `LiveSessionClient` owns that connection, and
+/// `LiveDirector` runs the tool loop against the server's tool list.
 nonisolated public final class MapboxVoiceSession: @unchecked Sendable {
-    /// The tool the session runs itself to end the conversation.
+    /// The tool the director runs itself to end the conversation.
     public static let endConversationToolName = LiveVoiceSession.endConversationToolName
 
-    /// The tool the session runs itself to leave turn-by-turn guidance.
+    /// The tool a server-listed result uses to leave turn-by-turn guidance.
     public static let stopNavigationToolName = LiveVoiceSession.stopNavigationToolName
-
-    public static let defaultInstructions = """
-        You are a voice guide for a map. Use the Mapbox tools to search for places, look up details, and geocode. \
-        When the user asks for directions, call directions_tool. The app starts turn-by-turn guidance from that result. \
-        When the user asks to stop guidance, stop navigation, or stop directions, call \(stopNavigationToolName). \
-        The app ends the trip and the conversation stays open. \
-        Speak in one or two sentences. When the user says \"stop listening to me\", or that they are done, call \(endConversationToolName). \
-        The app closes the listening session.
-        """
 
     public let events: AsyncStream<MapboxVoiceEvent>
 
     private let client: MapboxMcpClient
     private let openAIAPIKey: String
-    private let instructions: String
+    private let registryLoader: (@Sendable (MapboxVoiceSession) async throws -> VoiceToolRegistry)?
     private let continuation: AsyncStream<MapboxVoiceEvent>.Continuation
-    private let audio = VoiceAudio()
     private let lock = NSLock()
-    private var live: LiveVoiceSession?
+    private var liveClient: LiveSessionClient?
+    private var directorSession: LiveDirectorSession?
+    private var outbound: AsyncStream<String>.Continuation?
+    private var outboundPump: Task<Void, Never>?
+    private var calls = VoicePendingCalls()
     private var stopped = false
     private var running = false
     private var closing = false
+    private var closeObserved = false
 
-    public init(client: MapboxMcpClient, openAIAPIKey: String, instructions: String = MapboxVoiceSession.defaultInstructions) {
+    public convenience init(client: MapboxMcpClient, openAIAPIKey: String) {
+        self.init(client: client, openAIAPIKey: openAIAPIKey, registryLoader: nil)
+    }
+
+    init(
+        client: MapboxMcpClient,
+        openAIAPIKey: String,
+        registryLoader: (@Sendable (MapboxVoiceSession) async throws -> VoiceToolRegistry)?
+    ) {
         self.client = client
         self.openAIAPIKey = openAIAPIKey
-        self.instructions = instructions
+        self.registryLoader = registryLoader
         var continuation: AsyncStream<MapboxVoiceEvent>.Continuation!
         events = AsyncStream { continuation = $0 }
         self.continuation = continuation
@@ -57,13 +60,7 @@ nonisolated public final class MapboxVoiceSession: @unchecked Sendable {
 
     public func start() async {
         guard begin() else { return }
-
-        defer {
-            audio.stop()
-            finish()
-            emit(.ended)
-            continuation.finish()
-        }
+        defer { endStart() }
 
         emit(.connecting)
         guard !openAIAPIKey.isEmpty else {
@@ -71,77 +68,252 @@ nonisolated public final class MapboxVoiceSession: @unchecked Sendable {
             return
         }
 
-        var reportedFailure = false
-        do {
-            let live = LiveVoiceSession(
-                apiKey: openAIAPIKey,
-                mcp: try await client.frameworkSession(),
-                instructions: instructions,
-                listener: VoiceListener(self)
-            )
-            setLive(live)
-            // The engine has to be playing before connect. The greeting arrives while connect is in flight,
-            // and play() drops any buffer that shows up before the engine has started.
-            try audio.start { chunk in
-                live.appendAudio(base64Pcm: chunk.base64EncodedString())
+        let liveClient = LiveSessionClient(apiKey: openAIAPIKey)
+        let outbound = AsyncStream<String>.makeStream()
+        let pump = Task {
+            for await event in outbound.stream {
+                await liveClient.send(event)
             }
-            try await live.connect()
-            if !isStopped {
-                emit(.listening)
-                try await live.awaitEnd()
+        }
+        store(liveClient, outbound: outbound.continuation, pump: pump)
+
+        do {
+            let registry = try await loadRegistry()
+            // Tool listing can outlast stop's 5 second close. connect() would open a new
+            // WebRTC session on this same client, and closing is already true so a later stop cannot tear it down.
+            guard !isStopped else { return }
+            let director = LiveDirector(registry: registry)
+            let directorSession = director.session(
+                send: { outbound.continuation.yield($0) },
+                onEndConversation: { [self] in
+                    self.stop()
+                },
+                onToolCall: { [self] name in
+                    self.beginToolCall(name)
+                }
+            )
+            store(directorSession)
+            guard !isStopped else { return }
+            let frames = try await liveClient.connect(
+                instructions: director.liveInstructions,
+                delegation: director.delegation
+            )
+            guard !isStopped else { return }
+            for await frame in frames {
+                if consume(frame, director: directorSession) {
+                    break
+                }
             }
         } catch is CancellationError {
         } catch {
             if !isStopped {
-                reportedFailure = true
                 emit(.failed(message: error.localizedDescription))
             }
         }
-        await closeLive(reportFailure: !reportedFailure)
     }
 
+    /// Asks the server to close, then tears the connection down once it does or after 5 seconds.
     public func stop() {
         lock.lock()
         stopped = true
         lock.unlock()
-        audio.stop()
         Task { await closeLive() }
     }
 
-    /// One closer. `stop()` and `start()`'s cleanup can both ask, and a second `socket.close()` races the first.
-    private func closeLive(reportFailure: Bool = false) async {
-        guard let session = claimClose() else { return }
-        do {
-            try await session.stop()
-        } catch is CancellationError {
-        } catch {
-            if reportFailure, !isStopped {
-                emit(.failed(message: error.localizedDescription))
+    func updateContext(_ context: VoiceContext) {
+        lock.lock()
+        let session = directorSession
+        lock.unlock()
+        session?.updateContext(context)
+    }
+
+    private func loadRegistry() async throws -> VoiceToolRegistry {
+        if let registryLoader {
+            return try await registryLoader(self)
+        }
+        return try await makeRegistry()
+    }
+
+    private func makeRegistry() async throws -> VoiceToolRegistry {
+        // The sample's voice path still requires the app's Mapbox MCP client. A stand-in session cannot open one.
+        _ = try await client.frameworkSession()
+        let tools = try await client.listTools()
+        let voiceTools = tools.compactMap { tool -> VoiceTool? in
+            guard tool.name != Self.endConversationToolName else { return nil }
+            let name = tool.name
+            return VoiceTool(
+                name: name,
+                description: tool.description,
+                parameters: Self.schema(tool.inputSchemaJSON),
+                supportsConcurrentExecution: false
+            ) { [self] argumentsJSON in
+                await self.perform(name: name, argumentsJSON: argumentsJSON)
             }
+        }
+        return VoiceToolRegistry(tools: voiceTools)
+    }
+
+    /// The director calls this before it runs the tool. Emitting here is the tool-call event; the run closure emits the result.
+    private func beginToolCall(_ name: String) {
+        let call = lock.withLock { calls.begin(name) }
+        emit(.toolCall(name: call.name, callId: call.callId, arguments: call.arguments))
+    }
+
+    private func perform(name: String, argumentsJSON: String) async -> VoiceToolOutcome {
+        let call = takeActiveCall(name: name, argumentsJSON: argumentsJSON)
+        do {
+            let result = try await client.callTool(name: name, argumentsJSON: argumentsJSON)
+            emit(.toolResult(
+                name: name,
+                callId: call.callId,
+                text: result.text,
+                isError: result.isError,
+                structuredJSON: result.structuredJSON
+            ))
+            if result.isError {
+                return .failure(result.text)
+            }
+            return VoiceToolOutcome(output: result.text, error: nil)
+        } catch {
+            let message = error.localizedDescription
+            emit(.toolResult(name: name, callId: call.callId, text: message, isError: true, structuredJSON: nil))
+            return .failure(message)
         }
     }
 
-    private func claimClose() -> LiveVoiceSession? {
+    private func consume(_ frame: String, director: LiveDirectorSession) -> Bool {
+        lock.lock()
+        calls.observe(frame)
+        lock.unlock()
+        director.onServerEvent(frame)
+        guard let type = eventType(frame) else { return false }
+        switch type {
+        case "session.started":
+            emit(.listening)
+            return false
+        case "error":
+            emit(.serverError(message: errorMessage(frame)))
+            return false
+        case "session.closed":
+            markCloseObserved()
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func closeLive() async {
+        guard let client = claimClose() else { return }
+        await client.requestClose()
+        await waitForServerClose()
+        client.disconnect()
+    }
+
+    private func waitForServerClose() async {
+        let deadline = ContinuousClock().now.advanced(by: .seconds(5))
+        while ContinuousClock().now < deadline {
+            if isCloseObserved { return }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+    }
+
+    private func endStart() {
+        let pump: Task<Void, Never>?
+        let outbound: AsyncStream<String>.Continuation?
+        let director: LiveDirectorSession?
+        let client: LiveSessionClient?
+        lock.lock()
+        pump = outboundPump
+        outbound = self.outbound
+        director = directorSession
+        client = liveClient
+        outboundPump = nil
+        self.outbound = nil
+        lock.unlock()
+
+        outbound?.finish()
+        pump?.cancel()
+        director?.close()
+        client?.disconnect()
+        markCloseObserved()
+        finish()
+        emit(.ended)
+        continuation.finish()
+    }
+
+    private func takeActiveCall(name: String, argumentsJSON: String) -> TrackedCall {
         lock.lock()
         defer { lock.unlock() }
-        guard let session = live, !closing else { return nil }
-        closing = true
-        return session
+        return calls.takeActive(name: name, argumentsJSON: argumentsJSON)
     }
 
-    fileprivate func play(_ base64Pcm: String) {
-        guard let pcm = Data(base64Encoded: base64Pcm) else { return }
-        audio.play(pcm)
+    private func eventType(_ frame: String) -> String? {
+        jsonObject(frame)?["type"] as? String
     }
 
-    fileprivate func emit(_ event: MapboxVoiceEvent) {
-        continuation.yield(event)
+    private func errorMessage(_ frame: String) -> String {
+        guard let object = jsonObject(frame) else { return frame }
+        if let error = object["error"] as? [String: Any],
+           let message = error["message"] as? String,
+           !message.isEmpty {
+            return message
+        }
+        if let message = object["message"] as? String, !message.isEmpty {
+            return message
+        }
+        return frame
     }
 
-    private func setLive(_ session: LiveVoiceSession) {
+    private func jsonObject(_ frame: String) -> [String: Any]? {
+        guard let data = frame.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return object
+    }
+
+    private static func schema(_ json: String) -> [String: Any] {
+        guard let data = json.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return [:]
+        }
+        return object
+    }
+
+    private func store(
+        _ client: LiveSessionClient,
+        outbound: AsyncStream<String>.Continuation,
+        pump: Task<Void, Never>
+    ) {
         lock.lock()
-        live = session
+        liveClient = client
+        self.outbound = outbound
+        outboundPump = pump
         lock.unlock()
+    }
+
+    private func store(_ session: LiveDirectorSession) {
+        lock.lock()
+        directorSession = session
+        lock.unlock()
+    }
+
+    private func claimClose() -> LiveSessionClient? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let client = liveClient, !closing else { return nil }
+        closing = true
+        return client
+    }
+
+    private func markCloseObserved() {
+        lock.lock()
+        closeObserved = true
+        lock.unlock()
+    }
+
+    private func emit(_ event: MapboxVoiceEvent) {
+        continuation.yield(event)
     }
 
     private func begin() -> Bool {
@@ -150,13 +322,17 @@ nonisolated public final class MapboxVoiceSession: @unchecked Sendable {
         if running { return false }
         running = true
         stopped = false
+        closing = false
+        closeObserved = false
+        calls = VoicePendingCalls()
         return true
     }
 
     private func finish() {
         lock.lock()
         running = false
-        live = nil
+        liveClient = nil
+        directorSession = nil
         lock.unlock()
     }
 
@@ -165,30 +341,91 @@ nonisolated public final class MapboxVoiceSession: @unchecked Sendable {
         defer { lock.unlock() }
         return stopped
     }
+
+    private var isCloseObserved: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return closeObserved
+    }
 }
 
-nonisolated private final class VoiceListener: NSObject, LiveVoiceListener, @unchecked Sendable {
-    private weak var session: MapboxVoiceSession?
+nonisolated struct TrackedCall: Sendable, Equatable {
+    var name: String
+    var callId: String
+    var arguments: String
+}
 
-    init(_ session: MapboxVoiceSession) {
-        self.session = session
+/// Call ids the map pairs with tool results. The director drops a round without `onToolCall` on
+/// `response.created`, `response.failed`, `response.incomplete`, and `response.completed` when the
+/// response status is present and not `completed`, so those ids are forgotten here too.
+nonisolated struct VoicePendingCalls {
+    private var pending: [TrackedCall] = []
+    private var active: TrackedCall?
+
+    mutating func observe(_ frame: String) {
+        if let call = Self.functionCall(in: frame) {
+            pending.append(call)
+        }
+        if Self.directorDropsPending(frame) {
+            pending.removeAll()
+        }
     }
 
-    func onAudio(base64Pcm: String) {
-        session?.play(base64Pcm)
+    mutating func begin(_ name: String) -> TrackedCall {
+        let index = pending.firstIndex { $0.name == name }
+        let call = index.map { pending.remove(at: $0) }
+            ?? TrackedCall(name: name, callId: "call_\(UUID().uuidString)", arguments: "{}")
+        active = call
+        return call
     }
 
-    func onToolCall(name: String, callId: String, arguments: String) {
-        session?.emit(.toolCall(name: name, callId: callId, arguments: arguments))
+    mutating func takeActive(name: String, argumentsJSON: String) -> TrackedCall {
+        if let active, active.name == name {
+            self.active = nil
+            return TrackedCall(name: name, callId: active.callId, arguments: argumentsJSON)
+        }
+        return TrackedCall(name: name, callId: "call_\(UUID().uuidString)", arguments: argumentsJSON)
     }
 
-    func onToolResult(name: String, callId: String, text: String, structuredJson: String?, isError: Bool) {
-        session?.emit(.toolResult(name: name, callId: callId, text: text, isError: isError, structuredJSON: structuredJson))
+    private static func directorDropsPending(_ frame: String) -> Bool {
+        guard let event = responseEvent(frame), let type = event["type"] as? String else { return false }
+        if type == "response.created" || type == "response.failed" || type == "response.incomplete" {
+            return true
+        }
+        guard type == "response.completed",
+              let response = event["response"] as? [String: Any],
+              let status = response["status"] as? String else {
+            return false
+        }
+        return status != "completed"
     }
 
-    func onError(message: String) {
-        session?.emit(.serverError(message: message))
+    private static func functionCall(in frame: String) -> TrackedCall? {
+        guard let event = responseEvent(frame),
+              event["type"] as? String == "response.output_item.done",
+              let item = event["item"] as? [String: Any],
+              item["type"] as? String == "function_call",
+              let name = item["name"] as? String,
+              let callID = item["call_id"] as? String else {
+            return nil
+        }
+        return TrackedCall(name: name, callId: callID, arguments: item["arguments"] as? String ?? "")
     }
 
-    func onEnded() {}
+    private static func responseEvent(_ frame: String) -> [String: Any]? {
+        guard let object = jsonObject(frame),
+              object["type"] as? String == "response.event",
+              let event = object["event"] as? [String: Any] else {
+            return nil
+        }
+        return event
+    }
+
+    private static func jsonObject(_ frame: String) -> [String: Any]? {
+        guard let data = frame.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return object
+    }
 }

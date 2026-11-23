@@ -100,6 +100,7 @@ android {
         exclude(group = "org.chromium.net", module = "cronet-common")
         exclude(group = "org.chromium.net", module = "cronet-shared")
         exclude(group = "org.chromium.net", module = "httpengine-native-provider")
+        exclude(group = "com.mapbox.navigationcore", module = "ev-ndk27")
     }
 }
 

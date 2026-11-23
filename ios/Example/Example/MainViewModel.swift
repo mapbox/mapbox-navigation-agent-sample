@@ -45,7 +45,6 @@ final class MainViewModel: ObservableObject {
     private let serverURL = MapboxMcpServerURL.mapbox
     private let accessToken = Bundle.main.object(forInfoDictionaryKey: "MBXAccessToken") as? String ?? ""
     private let openAIAPIKey = OpenAICredential.apiKey
-    private let instructions = VoiceGuide.instructions
     private let location = LocationAuthorization()
     private var session: MapboxVoiceSession?
     private var events: Task<Void, Never>?
@@ -56,9 +55,19 @@ final class MainViewModel: ObservableObject {
         }
     }
 
-    /// Start is enabled once permissions are granted, and it stays enabled while the session connects, so a tap can cancel it.
+    /// The button stays tappable until the session is closing, so a tap can cancel a session that is connecting.
+    /// Without microphone and location access a tap on Start shows a banner that names what is missing.
     var canToggle: Bool {
-        permissionsGranted && phase != .closing
+        phase != .closing
+    }
+
+    /// The banner for a Start tap without access, naming only what is missing.
+    nonisolated static func missingPermissionsText(microphoneGranted: Bool, locationGranted: Bool) -> String {
+        var missing: [String] = []
+        if !microphoneGranted { missing.append("microphone") }
+        if !locationGranted { missing.append("location") }
+        guard !missing.isEmpty else { return "" }
+        return "Allow \(missing.joined(separator: " and ")) access in Settings to start."
     }
 
     /// Asks for the microphone and location, as the Android sample does when the screen appears.
@@ -90,15 +99,28 @@ final class MainViewModel: ObservableObject {
         mapImageURL = nil
     }
 
+    /// Forwards the screen's navigation snapshot. The map view owns `Guide`, so it is the one that observes it.
+    func updateContext(_ context: VoiceContext) {
+        session?.updateContext(context)
+    }
+
     private func start() {
+        refreshPermissions()
         guard permissionsGranted else {
-            refreshPermissions()
+            notice = Notice(
+                text: Self.missingPermissionsText(
+                    microphoneGranted: AVAudioApplication.shared.recordPermission == .granted,
+                    locationGranted: [.authorizedWhenInUse, .authorizedAlways].contains(location.status)
+                ),
+                isError: true,
+                seconds: 5
+            )
             return
         }
         log.reset()
         phase = .connecting
         let client = MapboxMcpClient(serverURL: serverURL, accessToken: accessToken)
-        let session = MapboxVoiceSession(client: client, openAIAPIKey: openAIAPIKey, instructions: instructions)
+        let session = MapboxVoiceSession(client: client, openAIAPIKey: openAIAPIKey)
         self.session = session
         let stream = session.events
         events = Task {
