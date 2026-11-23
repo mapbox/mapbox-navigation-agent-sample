@@ -1,62 +1,69 @@
-![Mapbox location infrastructure for AI](assets/ai-voice-navigation.jpg)
+![Mapbox navigation tools for voice assistants](assets/ai-voice-navigation.jpg)
 
-# Mapbox AI Voice Navigation Sample App
-
-> [!NOTE]
-> The Mapbox AI Voice Navigation Sample App is available in Public Preview. By using it, you accept the [Mapbox Terms of Service](https://www.mapbox.com/legal/tos/). See [LICENSE.md](LICENSE.md) for details.
+# Voice assistant tools for the Mapbox Navigation SDK
 
 > [!WARNING]
-> This product is **experimental**. The APIs in the underlying libraries are subject to change, including breaking changes between releases.
+> **Experimental.** Tool names, arguments and APIs may change, including breaking changes between releases. We recommend pinning to a release tag. By using this repository you accept the [Mapbox Terms of Service](https://www.mapbox.com/legal/tos/). See [LICENSE.md](LICENSE.md).
 
-Developers are building AI assistants that work directly inside their apps, but these agents usually don't understand the physical world around them. The Mapbox AI Voice Navigation Sample App closes that gap by demonstrating how to add location capabilities to your in-app agents.
+This repository has 30 tools that let a large language model act on a live Mapbox navigation session. With them, a driver can say "find coffee along my route," "add a stop at the airport," or "how's traffic ahead?" The model calls the tools, and they search, plan and change routes, report on the trip, and move the map.
 
-The sample app in this repository shows how an agent can read and change context across mapping, search, and navigation controls. For example, a driver can use a voice command during navigation to add a stop to the route or check how traffic will affect an upcoming meeting, and a chat agent can add points to a map, move the map view, or summarize a route. Because the provided SDK handles the agent integration, your team spends less effort on it and can ship sooner.
+It also has sample apps for Android and iOS that show the tools working with a voice assistant. The samples use OpenAI's GPT-Live. The tools work with any LLM or agent framework.
 
-This repository is a reference example app that shows how to integrate the Mapbox AI Voice Navigation Sample SDK into your own app.
+## Pick your path
 
-## Get access
+| You are | Start here | Time |
+|---|---|---|
+| Curious, want to see it | [Install the Android APK](#try-it-in-five-minutes) | 5 min |
+| Ready to build it yourself | [Run a sample app](#run-a-sample-app) | 30 min |
+| Already building on the Navigation SDK | [Add the tools to your app](#add-the-tools-to-your-app) | 1 to 2 hours |
 
-The sample apps depend on the Mapbox AI Voice Navigation SDKs, which are available to Public Preview participants. To build the samples from source:
+All you need is a Mapbox account. Add an OpenAI API key to try the APK, or use any LLM you like when you build it yourself.
 
-1. [Request access](https://www.mapbox.com/forms/mapbox-agent-toolkit-for-maps-and-navigation-sdk), using the email address of your Mapbox account.
-2. We'll let you know when SDK downloads are enabled on your account.
-3. Follow your platform's README below to set up your credentials and run the app.
+## Try it in five minutes
 
-Want to try it first? [Install the pre-built Android APK](#install-the-pre-built-android-apk-github-releases), which you can use right away.
+1. Download the latest `app-release.apk` from an `android-v*` tag on [GitHub Releases](https://github.com/mapbox/mapbox-navigation-agent-sample/releases).
+2. On your Android device, allow installs from your browser or file manager.
+3. Open **Settings** in the app. Paste your [Mapbox public access token](https://account.mapbox.com/access-tokens/) and an OpenAI [project API key](https://platform.openai.com/api-keys).
+4. Grant microphone and location access, then tap **Start** and talk.
 
-## Platforms
+## Run a sample app
 
-| Platform | Folder                 | Getting started                     |
-|----------|------------------------|-------------------------------------|
-| Android  | [`android/`](android/) | [Android README](android/README.md) |
-| iOS      | [`ios/`](ios/)         | [iOS README](ios/README.md)         |
+| Platform | Folder | Guide |
+|---|---|---|
+| Android | [`android/`](android/) | [Android README](android/README.md) |
+| iOS | [`ios/`](ios/) | [iOS README](ios/README.md) |
 
-Each platform's README covers requirements, credentials, and how to run the sample app.
+Each guide covers requirements, Mapbox and OpenAI credentials, and how to run the app. If you're new to the Navigation SDK, its [Android](https://docs.mapbox.com/android/navigation/) and [iOS](https://docs.mapbox.com/ios/navigation/) docs explain the tokens the samples ask for.
 
-## Install the pre-built Android APK (GitHub Releases)
+## Add the tools to your app
 
-1. Open [GitHub Releases](https://github.com/mapbox/mapbox-navigation-agent-sample/releases) and download the latest `app-release.apk` from an `android-v*` tag.
-2. On your Android device, allow installation from your browser or file manager when prompted.
-3. Open **Settings** in the app and paste your [Mapbox public access token](https://account.mapbox.com/access-tokens/) and an OpenAI [project API key](https://platform.openai.com/api-keys) for [GPT-Live](https://developers.openai.com/api/docs/guides/live). The key has to be on a paid usage tier. GPT-Live is unavailable on the free tier, and voice time is billed to that account.
-4. Accept the first-launch notices, grant microphone and location when asked, and tap **Start**.
+You need an app that already runs a Navigation SDK session, and an LLM connection your app controls.
 
-Maps and routing use the Mapbox token you enter in Settings.
+**Android**
+
+1. Copy `android/toolkit` into your project and add `include(":toolkit")` to `settings.gradle.kts`. Copy the version catalog entries it uses from [`libs.versions.toml`](android/gradle/libs.versions.toml).
+2. Add the Mapbox releases and snapshots Maven repositories with your `MAPBOX_DOWNLOADS_TOKEN`, as the sample's [`settings.gradle.kts`](android/settings.gradle.kts) does. The toolkit's `agent` dependency is only in the snapshots repository.
+3. Add `implementation(project(":toolkit"))` to your app module.
+4. Attach the tools to your navigation view and connect them to your model session. The [Android README](android/README.md#add-the-sdk-to-your-app) has the code.
+
+**iOS**
+
+Add the `MapboxNavigationAgent` Swift package from [`ios/MapboxNavigationAgent`](ios/MapboxNavigationAgent). The [iOS README](ios/README.md) covers credentials and the voice session.
+
+Then copy the Example's `Live` folder, `MapboxMcpClient` and `MapboxVoiceSession` into your app and start a session with your Mapbox token and OpenAI key, as `MainViewModel` does.
+
+**Add your own tools.** Pass them alongside the built-in ones. The Android sample's `DeviceTimeAction` is a complete example.
+
+We expect to change how you add the tools. Watch [Releases](https://github.com/mapbox/mapbox-navigation-agent-sample/releases) for updates.
 
 ## How it works
-
-Each sample app pairs a Mapbox map that has turn-by-turn navigation with a voice assistant. The user talks to a realtime LLM, and the model fulfills the user's voice commands with a combination of two kinds of tools:
-
-- **Navigation SDK tools** run inside the app. They act on the map and the navigation session: they search, plan and change routes, report on the trip, and move the camera.
-- **MCP tools** run on the [Mapbox MCP server](https://docs.mapbox.com/location-ai/mcp-servers/mcp-server/). They provide services like search, place details, directions, travel times, areas you can reach, and feedback.
-
-The two samples show different balances of these. The Android sample relies mostly on Navigation SDK tools, and takes only the feedback tool from the MCP server. The iOS sample relies on the MCP server's tools, and the app draws their results on the map: pins, routes, and shapes. It runs a few tools of its own for the session. Both approaches work, so choose the one that fits your app. Each platform's README describes its sample.
 
 ```mermaid
 flowchart LR
     User((Driver))
-    LLM["Realtime LLM"]
-    Tools["Navigation SDK and MCP tools"]
-    Map["Map and navigation"]
+    LLM["Your LLM"]
+    Tools["Navigation tools"]
+    Map["Map and navigation session"]
 
     User <-->|voice| LLM
     LLM -->|tool calls| Tools
@@ -64,15 +71,20 @@ flowchart LR
     Tools -->|search, routes, camera| Map
 ```
 
-When the model calls a tool, the tool runs in the app or on the MCP server, the app updates the map, and the result goes back to the model.
+The driver talks to the model. The model calls a tool. The tool acts on the map and the navigation session in your app, and the result goes back to the model.
 
-The samples use OpenAI's GPT-Live, but the tools aren't tied to a specific model provider. You can use them with any LLM or AI agent framework.
+Most tools run inside your app, on the Navigation SDK. A few come from the [Mapbox MCP server](https://docs.mapbox.com/location-ai/mcp-servers/mcp-server/), such as search categories and driver feedback.
 
-The Android sample accepts the OpenAI key in the app, on the Settings screen. The iOS sample has no Settings field for it. Put the key in `~/.openai` before you build, as the [iOS README](ios/README.md#openai-key) describes.
+On iOS, every tool comes from the MCP server except `end_conversation`, which the app's `LiveDirector` runs itself.
+
+## What it costs
+
+- **Mapbox:** maps, search and routing count against the Mapbox account that owns your access token, at your normal rates.
+- **Model:** you bring the model and pay its provider. The samples use GPT-Live, which needs a paid OpenAI tier. Voice time is billed to your OpenAI account.
 
 ## Tools
 
-The SDK gives your agent the following tools, and your app decides which ones to use for its use case. The Platforms column shows which sample offers each one.
+Your app decides which tools to offer the model. The Platforms column shows which sample offers each one.
 
 The samples also offer tools from the Mapbox MCP server: the iOS sample offers all of them, and the Android sample offers `category_list_tool` and `feedback_tool`. For those tools, see the [Mapbox MCP server documentation](https://docs.mapbox.com/location-ai/mcp-servers/mcp-server/).
 
@@ -88,7 +100,6 @@ The samples also offer tools from the Mapbox MCP server: the iOS sample offers a
 | Routing      | `nav_sdk_navigate_to`             | Android      | Plans a route to a destination and starts turn-by-turn navigation right away.         |
 | Routing      | `nav_sdk_start_navigation`        | Android      | Starts turn-by-turn navigation to the current destination.                            |
 | Routing      | `nav_sdk_stop_navigation`         | Android      | Stops navigation and returns to free drive.                                           |
-| Routing      | `stop_navigation`                 | iOS          | Stops turn-by-turn navigation and keeps the voice session open.                       |
 | Routing      | `nav_sdk_dismiss_preview`         | Android      | Dismisses a route preview before navigation starts.                                   |
 | Routing      | `nav_sdk_add_waypoint`            | Android      | Adds one or more stops to the current route.                                          |
 | Routing      | `nav_sdk_remove_waypoint`         | Android      | Removes one or more stops from the current route.                                     |
@@ -109,3 +120,7 @@ The samples also offer tools from the Mapbox MCP server: the iOS sample offers a
 | Saved places | `get_work_address`                | Android      | Returns the user's saved work address.                                                |
 | Saved places | `set_work_address`                | Android      | Saves the user's work address.                                                        |
 | Session      | `end_conversation`                | Android, iOS | Ends the voice session when the user is done.                                         |
+
+## Feedback
+
+Open a [GitHub issue](https://github.com/mapbox/mapbox-navigation-agent-sample/issues) for bugs or tool requests. Driver feedback sent through `feedback_tool` goes to Feedback Explorer on your Mapbox account.

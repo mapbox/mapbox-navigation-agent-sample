@@ -11,6 +11,7 @@
 		043F0D8B309E8B0100A9AE42 /* MapboxNavigationCore in Frameworks */ = {isa = PBXBuildFile; productRef = 043F0D8A309E8B0100A9AE41 /* MapboxNavigationCore */; };
 		043F0D8D309E8B0100A9AE44 /* MapboxDirections in Frameworks */ = {isa = PBXBuildFile; productRef = 043F0D8C309E8B0100A9AE43 /* MapboxDirections */; };
 		043F0D90309E8B0100A9AE47 /* MapboxMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 043F0D8F309E8B0100A9AE46 /* MapboxMaps */; };
+		A5E5C1E00000000000000003 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = A5E5C1E00000000000000002 /* WebRTC */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -49,6 +50,7 @@
 				043F0D8B309E8B0100A9AE42 /* MapboxNavigationCore in Frameworks */,
 				043F0D8D309E8B0100A9AE44 /* MapboxDirections in Frameworks */,
 				043F0D90309E8B0100A9AE47 /* MapboxMaps in Frameworks */,
+				A5E5C1E00000000000000003 /* WebRTC in Frameworks */,
 			);
 		};
 		A10000000000000000000130 /* Frameworks */ = {
@@ -100,6 +102,7 @@
 				043F0D8A309E8B0100A9AE41 /* MapboxNavigationCore */,
 				043F0D8C309E8B0100A9AE43 /* MapboxDirections */,
 				043F0D8F309E8B0100A9AE46 /* MapboxMaps */,
+				A5E5C1E00000000000000002 /* WebRTC */,
 			);
 			productName = Example;
 			productReference = 000000000000000000000120 /* Example.app */;
@@ -153,6 +156,7 @@
 				043F0D85309E8A3A00A9AE3E /* XCLocalSwiftPackageReference "../MapboxNavigationAgent" */,
 				043F0D89309E8B0100A9AE40 /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */,
 				043F0D8E309E8B0100A9AE45 /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */,
+				A5E5C1E00000000000000001 /* XCRemoteSwiftPackageReference "WebRTC" */,
 			);
 			preferredProjectObjectVersion = 90;
 			productRefGroup = 000000000000000000000020 /* Products */;
@@ -534,6 +538,14 @@
 				version = 11.34.2;
 			};
 		};
+		A5E5C1E00000000000000001 /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC";
+			requirement = {
+				kind = exactVersion;
+				version = 125.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -555,6 +567,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 043F0D8E309E8B0100A9AE45 /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */;
 			productName = MapboxMaps;
+		};
+		A5E5C1E00000000000000002 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A5E5C1E00000000000000001 /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

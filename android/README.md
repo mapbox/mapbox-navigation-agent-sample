@@ -120,10 +120,10 @@ For example, when a driver asks for a coffee shop nearby:
 
 ## Add the SDK to your app
 
-The SDK isn't published as a Maven artifact yet. To use it in your own app:
+Your app needs the Mapbox Navigation SDK, because the tools act on its map. The `toolkit` SDK isn't published as a Maven artifact yet. To use it in your own app:
 
 1. Copy the `toolkit` folder into your project, and add it in `settings.gradle.kts` with `include(":toolkit")`. Its build file reads library versions from a version catalog, so also copy the entries it uses from [`libs.versions.toml`](gradle/libs.versions.toml).
-2. Add the Mapbox Maven repository with your `MAPBOX_DOWNLOADS_TOKEN`, as the sample's [`settings.gradle.kts`](settings.gradle.kts) does.
+2. Add the Mapbox releases and snapshots Maven repositories with your `MAPBOX_DOWNLOADS_TOKEN`, as the sample's [`settings.gradle.kts`](settings.gradle.kts) does. The toolkit's `agent` dependency is only in the snapshots repository.
 3. Add `implementation(project(":toolkit"))` to your app module's dependencies.
 
 Then connect it to your map and your live session. The sample app does this in `ToolkitApplication`, `MainScreen`, and `MainViewModel`:

@@ -31,6 +31,10 @@ android {
     }
 }
 
+configurations.configureEach {
+    exclude(group = "com.mapbox.navigationcore", module = "ev-ndk27")
+}
+
 kotlin {
     jvmToolchain(libs.versions.java.get().toInt())
 }

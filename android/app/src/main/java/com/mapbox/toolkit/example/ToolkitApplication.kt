@@ -2,7 +2,10 @@ package com.mapbox.toolkit.example
 
 import android.app.Application
 import com.mapbox.dash.sdk.Dash
+import com.mapbox.dash.sdk.config.api.MapIncidentsVisibility
+import com.mapbox.dash.sdk.config.api.MapTrafficVisibility
 import com.mapbox.dash.sdk.config.api.debugSettings
+import com.mapbox.dash.sdk.config.api.ui
 import com.mapbox.toolkit.example.settings.FirstLaunchStore
 import com.mapbox.toolkit.example.settings.MapboxAccessTokenStore
 import com.mapbox.toolkit.example.settings.OpenAiApiKeyStore
@@ -39,6 +42,10 @@ class ToolkitApplication : Application() {
         // Adds a location simulation option to the UX Framework's settings, for trying the assistant away from the road.
         debugSettings {
           showSimulateLocationOption = true
+        }
+        ui {
+          mapTrafficVisibility = MapTrafficVisibility.NEVER
+          mapIncidentsVisibility = MapIncidentsVisibility.NEVER
         }
       }
       dashInitialized = true

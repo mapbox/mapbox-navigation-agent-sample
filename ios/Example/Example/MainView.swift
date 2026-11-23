@@ -116,11 +116,41 @@ struct MainView: View {
             guidanceRequest = nil
             selected = nil
         }
+        .onChange(of: voiceContextRevision) { _, _ in
+            voice.updateContext(currentVoiceContext)
+        }
     }
 
     private var routeToken: String {
         guard let selected else { return "" }
         return "\(selected.id)|\(mode.rawValue)|\(routeGeneration)"
+    }
+
+    /// Changes when the trip, its destination, or the travel mode changes, and again when the session can accept context.
+    private var voiceContextRevision: String {
+        "\(guide.isNavigating)|\(selected?.name ?? "")|\(mode.rawValue)|\(voice.phase)"
+    }
+
+    private var currentVoiceContext: VoiceContext {
+        let active = guide.isNavigating
+        let destination = selected?.name ?? "none"
+        let travelMode = (active || selected != nil) ? modeToken : "none"
+        let origin = Guide.origin
+        let summary = "Navigation: \(active ? "active" : "idle"). Destination: \(destination). Mode: \(travelMode)."
+        return VoiceContext(
+            latitude: origin.coordinate.latitude,
+            longitude: origin.coordinate.longitude,
+            navigationActive: active,
+            summary: summary
+        )
+    }
+
+    private var modeToken: String {
+        switch mode {
+        case .walking: "walking"
+        case .driving: "driving"
+        case .cycling: "cycling"
+        }
     }
 
     private var browsing: some View {
