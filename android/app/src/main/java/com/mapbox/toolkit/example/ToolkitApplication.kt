@@ -5,6 +5,7 @@ import com.mapbox.dash.sdk.Dash
 import com.mapbox.dash.sdk.config.api.MapIncidentsVisibility
 import com.mapbox.dash.sdk.config.api.MapTrafficVisibility
 import com.mapbox.dash.sdk.config.api.debugSettings
+import com.mapbox.dash.sdk.config.api.mapStyle
 import com.mapbox.dash.sdk.config.api.ui
 import com.mapbox.toolkit.example.settings.FirstLaunchStore
 import com.mapbox.toolkit.example.settings.MapboxAccessTokenStore
@@ -46,6 +47,12 @@ class ToolkitApplication : Application() {
         ui {
           mapTrafficVisibility = MapTrafficVisibility.NEVER
           mapIncidentsVisibility = MapIncidentsVisibility.NEVER
+        }
+        mapStyle {
+          dayStyleUri = "mapbox://styles/mapbox/navigation-day-v1"
+          nightStyleUri = "mapbox://styles/mapbox/navigation-night-v1"
+          satelliteStyleUri = "mapbox://styles/mapbox/standard-satellite"
+          map3dStyleUri = "mapbox://styles/mapbox/standard"
         }
       }
       dashInitialized = true
