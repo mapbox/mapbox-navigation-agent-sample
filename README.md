@@ -21,7 +21,7 @@ All you need is a Mapbox account. Add an OpenAI API key to try the APK, or use a
 
 ## Try it in five minutes
 
-1. Download the latest `app-release.apk` from an `android-v*` tag on [GitHub Releases](https://github.com/mapbox/mapbox-navigation-agent-sample/releases).
+1. Download the latest `app-release.apk` from an `android-v*` tag on [GitHub Releases](https://github.com/mapbox/mapbox-navigation-agent-tools/releases).
 2. On your Android device, allow installs from your browser or file manager.
 3. Open **Settings** in the app. Paste your [Mapbox public access token](https://account.mapbox.com/access-tokens/) and an OpenAI [project API key](https://platform.openai.com/api-keys).
 4. Grant microphone and location access, then tap **Start** and talk.
@@ -54,7 +54,7 @@ Then copy the Example's `Live` folder, `MapboxMcpClient` and `MapboxVoiceSession
 
 **Add your own tools.** Pass them alongside the built-in ones. The Android sample's `DeviceTimeAction` is a complete example.
 
-We expect to change how you add the tools. Watch [Releases](https://github.com/mapbox/mapbox-navigation-agent-sample/releases) for updates.
+We expect to change how you add the tools. Watch [Releases](https://github.com/mapbox/mapbox-navigation-agent-tools/releases) for updates.
 
 ## How it works
 
@@ -123,4 +123,4 @@ The samples also offer tools from the Mapbox MCP server: the iOS sample offers a
 
 ## Feedback
 
-Open a [GitHub issue](https://github.com/mapbox/mapbox-navigation-agent-sample/issues) for bugs or tool requests. Driver feedback sent through `feedback_tool` goes to Feedback Explorer on your Mapbox account.
+Open a [GitHub issue](https://github.com/mapbox/mapbox-navigation-agent-tools/issues) for bugs or tool requests. Driver feedback sent through `feedback_tool` goes to Feedback Explorer on your Mapbox account.
